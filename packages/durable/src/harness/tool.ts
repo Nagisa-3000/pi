@@ -318,6 +318,7 @@ function publishProgress(runtime: Runtime, reported: Reported, context: Context)
 			// Rejections after an abort mark or close are expected; the committed state stays consistent.
 			if (!runtime.signal.aborted) runtime.report(error);
 		},
+		runtime.settings.progress.outputIntervalMs,
 	);
 }
 

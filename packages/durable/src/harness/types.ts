@@ -388,6 +388,14 @@ export type CompactionReason = "manual" | "threshold" | "overflow";
  */
 export type CompactionResult = { entryId?: EntryId; submissionId?: SubmissionId };
 
+/** Minimum intervals between durable progress writes. */
+export type ProgressPolicy = {
+	/** Delay before committing a streamed partial answer. Default 100 ms. */
+	partialIntervalMs: number;
+	/** Minimum pause between tool progress commits; byte backpressure may extend it. Default 100 ms. */
+	outputIntervalMs: number;
+};
+
 /** Harness-wide run policy. Read at every resolution and never copied; getters are fine. Synchronous: some readers run on the Session line. */
 export type HarnessSettings = {
 	/** Default extension selection; absent: every installed extension, in install order. */
@@ -395,6 +403,7 @@ export type HarnessSettings = {
 	readonly stream?: ConversationStreamOptions;
 	readonly retry?: Partial<ConversationRetryPolicy>;
 	readonly compaction?: Partial<CompactionPolicy>;
+	readonly progress?: Partial<ProgressPolicy>;
 	readonly toolExecution?: ToolExecutionMode;
 	readonly steeringMode?: QueueMode;
 	readonly followUpMode?: QueueMode;
@@ -407,6 +416,7 @@ export type Settings = {
 	readonly stream: ConversationStreamOptions;
 	readonly retry: ConversationRetryPolicy;
 	readonly compaction: CompactionPolicy;
+	readonly progress: ProgressPolicy;
 	readonly toolExecution: ToolExecutionMode;
 	readonly steeringMode: QueueMode;
 	readonly followUpMode: QueueMode;

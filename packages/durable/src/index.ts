@@ -13,6 +13,7 @@ export {
 	AgentDoc,
 	configure,
 	DEFAULT_COMPACTION_POLICY,
+	DEFAULT_PROGRESS_POLICY,
 	DEFAULT_RETRY_POLICY,
 } from "./harness/agent.ts";
 export {
@@ -71,6 +72,7 @@ export type {
 	HooksOf,
 	InputSubmissionDraft,
 	ModelRef,
+	ProgressPolicy,
 	PromptInput,
 	PromptSection,
 	QueueMode,

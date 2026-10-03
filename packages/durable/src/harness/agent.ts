@@ -9,6 +9,7 @@ import type {
 	ConversationRetryPolicy,
 	Extension,
 	HarnessSettings,
+	ProgressPolicy,
 	PromptSection,
 	RegistrySnapshot,
 	Settings,
@@ -29,6 +30,11 @@ export const DEFAULT_COMPACTION_POLICY: CompactionPolicy = {
 	backgroundTokens: 32768,
 };
 
+export const DEFAULT_PROGRESS_POLICY: ProgressPolicy = {
+	partialIntervalMs: 100,
+	outputIntervalMs: 100,
+};
+
 /** The reserved section key of the agent's `instructions`. */
 export const INSTRUCTIONS_KEY = "instructions";
 
@@ -46,11 +52,21 @@ export const AgentDoc = defineDoc<AgentState>({
 /** Resolve the host settings: every field over its built-in default, object fields merged. */
 export function resolveSettings(settings: HarnessSettings | undefined): Settings {
 	const extensions = settings?.extensions;
+	const progress: ProgressPolicy = {
+		partialIntervalMs: settings?.progress?.partialIntervalMs ?? DEFAULT_PROGRESS_POLICY.partialIntervalMs,
+		outputIntervalMs: settings?.progress?.outputIntervalMs ?? DEFAULT_PROGRESS_POLICY.outputIntervalMs,
+	};
+	for (const [name, interval] of Object.entries(progress)) {
+		if (!Number.isInteger(interval) || interval < 0 || interval > 2_147_483_647) {
+			throw new RangeError(`progress.${name} must be an integer between 0 and 2147483647 ms`);
+		}
+	}
 	return {
 		...(extensions === undefined ? {} : { extensions }),
 		stream: { ...settings?.stream },
 		retry: { ...DEFAULT_RETRY_POLICY, ...settings?.retry },
 		compaction: { ...DEFAULT_COMPACTION_POLICY, ...settings?.compaction },
+		progress,
 		toolExecution: settings?.toolExecution ?? "parallel",
 		steeringMode: settings?.steeringMode ?? "one-at-a-time",
 		followUpMode: settings?.followUpMode ?? "one-at-a-time",

@@ -206,17 +206,18 @@ function countNewlines(text: string): number {
 }
 
 /** Minimum pause between progress commits; each commit also buys a pause proportional to what it wrote. */
-const MIN_PROGRESS_INTERVAL_MS = 100;
+const DEFAULT_PROGRESS_INTERVAL_MS = 100;
 const PROGRESS_BYTES_PER_SECOND = 100 * 1024;
 
 /**
  * Adaptive progress commits, like the environment's shell output capture: the first change after an idle period
- * commits at once; each commit then delays the next by at least 100 ms and by its written size at 100 KiB/s. At most
+ * commits at once; each commit then delays the next by the configured minimum and its written size at 100 KiB/s. At most
  * one commit is in flight; changes made meanwhile coalesce into the next one.
  */
 export class Progress {
 	readonly #write: () => Promise<number>;
 	readonly #onError: (error: unknown) => void;
+	readonly #intervalMs: number;
 	#waiters: PromiseWithResolvers<void>[] = [];
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#inFlight: Promise<void> | undefined;
@@ -224,9 +225,14 @@ export class Progress {
 	#dirty = false;
 	#stopped = false;
 
-	constructor(write: () => Promise<number>, onError: (error: unknown) => void) {
+	constructor(
+		write: () => Promise<number>,
+		onError: (error: unknown) => void,
+		intervalMs = DEFAULT_PROGRESS_INTERVAL_MS,
+	) {
 		this.#write = write;
 		this.#onError = onError;
+		this.#intervalMs = intervalMs;
 	}
 
 	/** Schedule a commit. */
@@ -271,11 +277,11 @@ export class Progress {
 		this.#inFlight = this.#write()
 			.then(
 				(bytes) => {
-					this.#nextAt = started + Math.max(MIN_PROGRESS_INTERVAL_MS, (bytes * 1000) / PROGRESS_BYTES_PER_SECOND);
+					this.#nextAt = started + Math.max(this.#intervalMs, (bytes * 1000) / PROGRESS_BYTES_PER_SECOND);
 					for (const waiter of waiters) waiter.resolve();
 				},
 				(error: unknown) => {
-					this.#nextAt = started + MIN_PROGRESS_INTERVAL_MS;
+					this.#nextAt = started + this.#intervalMs;
 					for (const waiter of waiters) waiter.reject(error);
 					this.#onError(error);
 				},

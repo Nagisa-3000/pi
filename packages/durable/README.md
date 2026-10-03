@@ -220,6 +220,7 @@ const harness = await Harness.open(storage, {
 		stream: { timeoutMs: 120_000 },
 		retry: { maxRetries: 3 },
 		compaction: { reserveTokens: 16384 },
+		progress: { partialIntervalMs: 1000, outputIntervalMs: 1000 },
 		toolExecution: "parallel",
 		get followUpMode() {
 			return userSettings.followUpMode;
@@ -284,7 +285,9 @@ watch.start(async (value, ops) => {
 
 A slow watch keeps at most 100 undelivered frames. After that, the pending frames are replaced by one frame holding the whole newest view. A client that joins late or reconnects starts from the current view; nothing is replayed.
 
-Partial answers and tool output are committed at most every 100 ms, so a crash loses at most that window.
+Partial answers and tool output use `settings.progress.partialIntervalMs` and `settings.progress.outputIntervalMs`, both defaulting to 100 ms. Each accepts an integer from 0 to 2147483647 ms; 0 removes the minimum delay. Tool progress also pauses in proportion to the bytes written and coalesces changes while a commit is in flight.
+
+Longer intervals reduce writes to remote storage and make live updates less frequent. A crash or cancellation can lose progress since the last stored update. Completed answers and tool results still commit promptly, including output and details waiting for a progress commit. The intervals are read when each model stream or tool call starts.
 
 ## Busy Conversations
 

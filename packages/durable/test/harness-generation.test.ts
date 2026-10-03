@@ -418,6 +418,8 @@ describe("generation", () => {
 			stream: {},
 			retry: { enabled: true, maxRetries: 3, baseDelayMs: 2000, maxAgentDelayMs: 60000 },
 			compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000, backgroundTokens: 32768 },
+			// #10357: omitted progress settings retain the existing commit intervals.
+			progress: { partialIntervalMs: 100, outputIntervalMs: 100 },
 			toolExecution: "parallel",
 			steeringMode: "one-at-a-time",
 			followUpMode: "one-at-a-time",
