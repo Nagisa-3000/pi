@@ -698,7 +698,7 @@ function parseModifyOtherKeysSequence(data: string): ParsedModifyOtherKeysSequen
 	if (!match) return null;
 	const modValue = parseInt(match[1]!, 10);
 	const codepoint = parseInt(match[2]!, 10);
-	return { codepoint, modifier: modValue - 1 };
+	return { codepoint, modifier: (modValue - 1) & ~LOCK_MASK };
 }
 
 /**
@@ -831,11 +831,10 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
 	switch (key) {
 		case "escape":
 		case "esc":
-			if (modifier !== 0) return false;
 			return (
-				data === "\x1b" ||
-				matchesKittySequence(data, CODEPOINTS.escape, 0) ||
-				matchesModifyOtherKeys(data, CODEPOINTS.escape, 0)
+				(modifier === 0 && data === "\x1b") ||
+				matchesKittySequence(data, CODEPOINTS.escape, modifier) ||
+				matchesModifyOtherKeys(data, CODEPOINTS.escape, modifier)
 			);
 
 		case "space":
