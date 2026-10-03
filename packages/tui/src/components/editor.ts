@@ -1396,26 +1396,36 @@ export class Editor implements Component, Focusable {
 			if (isPastedSegmented) {
 				// This contains the id part e.g 4 from [paste #4 +123 lines]
 				const targetId = Number(isPastedSegmented[1]);
-				this.pastes.delete(targetId);
-				this.pasteCounter--;
-
-				// Shift registry entries down in ascending id order, independent
-				// of marker order in the text ([paste #3] becomes [paste #2] when
-				// [paste #1] is removed).
-				const higherIds = [...this.pastes.keys()].filter((id) => id > targetId).sort((a, b) => a - b);
-				for (const id of higherIds) {
-					this.pastes.set(id - 1, this.pastes.get(id)!);
-					this.pastes.delete(id);
-				}
-
-				// Renumber markers with ids greater than the removed one.
-				this.state.lines = this.state.lines.map((line) =>
-					line.replace(PASTE_MARKER_REGEX, (fullMatch, idGroup, suffixGroup) => {
-						const x = Number(idGroup);
-						if (x <= targetId) return fullMatch;
-						return `[paste #${x - 1}${suffixGroup}]`;
-					}),
+				const hasOtherReference = this.state.lines.some((candidate, index) =>
+					[...candidate.matchAll(PASTE_MARKER_REGEX)].some(
+						(marker) =>
+							Number(marker[1]) === targetId &&
+							(index !== this.state.cursorLine || marker.index !== this.state.cursorCol - graphemeLength),
+					),
 				);
+				// Yank can insert the same marker more than once. Retire its payload only after the last copy is removed.
+				if (!hasOtherReference) {
+					this.pastes.delete(targetId);
+					this.pasteCounter--;
+
+					// Shift registry entries down in ascending id order, independent
+					// of marker order in the text ([paste #3] becomes [paste #2] when
+					// [paste #1] is removed).
+					const higherIds = [...this.pastes.keys()].filter((id) => id > targetId).sort((a, b) => a - b);
+					for (const id of higherIds) {
+						this.pastes.set(id - 1, this.pastes.get(id)!);
+						this.pastes.delete(id);
+					}
+
+					// Renumber markers with ids greater than the removed one.
+					this.state.lines = this.state.lines.map((line) =>
+						line.replace(PASTE_MARKER_REGEX, (fullMatch, idGroup, suffixGroup) => {
+							const x = Number(idGroup);
+							if (x <= targetId) return fullMatch;
+							return `[paste #${x - 1}${suffixGroup}]`;
+						}),
+					);
+				}
 			}
 
 			line = this.state.lines[this.state.cursorLine] || "";
