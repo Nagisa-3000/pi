@@ -4,9 +4,11 @@ import {
 	chmodSync,
 	existsSync,
 	globSync,
+	lstatSync,
 	mkdirSync,
 	readdirSync,
 	readFileSync,
+	realpathSync,
 	rmSync,
 	statSync,
 	writeFileSync,
@@ -32,7 +34,7 @@ function getEnv(): NodeJS.ProcessEnv {
 	}
 }
 
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { Readable } from "node:stream";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
@@ -1876,6 +1878,7 @@ export class DefaultPackageManager implements PackageManager {
 		if (!existsSync(installRoot)) {
 			return;
 		}
+		this.assertNpmProjectIsolated(installRoot);
 		const packageManagerName = this.getPackageManagerName();
 		if (packageManagerName === "bun") {
 			await this.runNpmCommand(["uninstall", source.name, "--cwd", installRoot]);
@@ -2059,10 +2062,35 @@ export class DefaultPackageManager implements PackageManager {
 		}
 	}
 
+	private assertNpmProjectIsolated(installRoot: string): void {
+		const nodeModules = join(installRoot, "node_modules");
+		if (!lstatSync(nodeModules, { throwIfNoEntry: false })) return;
+
+		const root = realpathSync(installRoot);
+		const assertDirectory = (path: string): void => {
+			const target = realpathSync(path);
+			const rel = relative(root, target);
+			if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+				throw new Error(
+					`Refusing to modify npm packages: ${path} resolves outside managed npm install root to ${target}. Remove the directory link without deleting its target, then retry.`,
+				);
+			}
+		};
+
+		// npm can prune through scope junctions. Package-level links remain valid npm/pnpm layouts.
+		assertDirectory(nodeModules);
+		for (const entry of readdirSync(nodeModules, { withFileTypes: true })) {
+			if (entry.name.startsWith("@") && (entry.isDirectory() || entry.isSymbolicLink())) {
+				assertDirectory(join(nodeModules, entry.name));
+			}
+		}
+	}
+
 	private ensureNpmProject(installRoot: string): void {
 		if (!existsSync(installRoot)) {
 			mkdirSync(installRoot, { recursive: true });
 		}
+		this.assertNpmProjectIsolated(installRoot);
 		markPathIgnoredByCloudSync(installRoot);
 		this.ensureGitIgnore(installRoot);
 		const packageJsonPath = join(installRoot, "package.json");
