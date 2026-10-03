@@ -18,17 +18,20 @@ import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dis
 export interface CompactionModelOverride {
 	reserveTokens?: number;
 	keepRecentTokens?: number;
+	thresholdRatio?: number;
 }
 
-const DEFAULT_COMPACTION_TOKEN_SETTINGS: Required<CompactionModelOverride> = {
-	reserveTokens: 16384,
-	keepRecentTokens: 20000,
-};
+const DEFAULT_COMPACTION_TOKEN_SETTINGS: Required<Pick<CompactionModelOverride, "reserveTokens" | "keepRecentTokens">> =
+	{
+		reserveTokens: 16384,
+		keepRecentTokens: 20000,
+	};
 
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
 	reserveTokens?: number; // default: 16384
 	keepRecentTokens?: number; // default: 20000
+	thresholdRatio?: number; // optional fraction of the context window, between 0 and 1
 	modelOverrides?: Record<string, CompactionModelOverride>; // exact "provider/modelId" keys
 }
 
@@ -925,7 +928,7 @@ export class SettingsManager {
 	}
 
 	private getCompactionTokenSetting(
-		field: keyof CompactionModelOverride,
+		field: "reserveTokens" | "keepRecentTokens",
 		model?: Pick<Model<string>, "provider" | "id">,
 	): number {
 		const compaction = this.settings.compaction;
@@ -960,16 +963,36 @@ export class SettingsManager {
 		return this.getCompactionTokenSetting("keepRecentTokens", model);
 	}
 
-	/** Resolve each token setting through model override, ordinary setting, then built-in default. */
+	/** Resolve compaction settings for the selected model. */
 	getCompactionSettings(model?: Pick<Model<string>, "provider" | "id">): {
 		enabled: boolean;
 		reserveTokens: number;
 		keepRecentTokens: number;
+		thresholdRatio?: number;
 	} {
+		const ordinary = this.settings.compaction?.thresholdRatio;
+		const modelKey = model ? `${model.provider}/${model.id}` : undefined;
+		const override =
+			modelKey === undefined ? undefined : this.settings.compaction?.modelOverrides?.[modelKey]?.thresholdRatio;
+		for (const [value, path] of [
+			[ordinary, "compaction.thresholdRatio"],
+			[override, `compaction.modelOverrides["${modelKey}"].thresholdRatio`],
+		] as const) {
+			if (
+				value !== undefined &&
+				(typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value >= 1)
+			) {
+				throw new Error(
+					`Invalid ${path} setting: ${String(value)}. Expected a finite number greater than 0 and less than 1.`,
+				);
+			}
+		}
+		const thresholdRatio = override ?? ordinary;
 		return {
 			enabled: this.getCompactionEnabled(),
 			reserveTokens: this.getCompactionReserveTokens(model),
 			keepRecentTokens: this.getCompactionKeepRecentTokens(model),
+			...(thresholdRatio === undefined ? {} : { thresholdRatio }),
 		};
 	}
 

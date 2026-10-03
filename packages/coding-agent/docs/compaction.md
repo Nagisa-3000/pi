@@ -26,13 +26,21 @@ Both use closely related structured formats and track file operations cumulative
 
 ### When It Triggers
 
-Auto-compaction triggers when:
+By default, auto-compaction triggers when:
 
 ```
 contextTokens > contextWindow - reserveTokens
 ```
 
 By default, `reserveTokens` is 16384 tokens (configurable in `~/.pi/agent/settings.json` or `<project-dir>/.pi/settings.json`). This leaves room for the LLM's response.
+
+Set `compaction.thresholdRatio` to use the same percentage across context sizes instead:
+
+```
+contextTokens > Math.floor(contextWindow * thresholdRatio)
+```
+
+For example, `0.85` triggers above 231200 tokens for a 272K window and above 765000 tokens for a 900K window. The ratio affects only automatic threshold checks; `reserveTokens` still controls summarization output and `keepRecentTokens` still controls retained history. Choose a ratio that leaves room for the next response and tool results.
 
 During a multi-turn agent run, Pi checks the canonical projected context after tools finish and their results are appended, before starting the next assistant response. If the threshold is crossed, Pi compacts during `prepareNextTurn`, then performs the existing catch-up steering poll before `turn_start`. It skips this between-turn check when the completed tool batch terminates the run and no queued message requires another response. Pi also checks before a new user prompt and performs final-attempt overflow recovery after the low-level run ends.
 
@@ -433,12 +441,13 @@ Configure compaction in `~/.pi/agent/settings.json` or `<project-dir>/.pi/settin
 | `enabled` | `true` | Enable auto-compaction |
 | `reserveTokens` | `16384` | Tokens to reserve for LLM response |
 | `keepRecentTokens` | `20000` | Recent tokens to keep (not summarized) |
+| `thresholdRatio` | Omitted | Optional context-window fraction for the automatic threshold; a finite number greater than 0 and less than 1 |
 
 Disable auto-compaction with `"enabled": false`. You can still compact manually with `/compact`.
 
 ### Per-model overrides
 
-Use `compaction.modelOverrides` to tune token budgets for different models:
+Use `compaction.modelOverrides` to tune token budgets and threshold ratios for different models:
 
 ```json
 {
@@ -457,6 +466,8 @@ Use `compaction.modelOverrides` to tune token budgets for different models:
 For a model with a 1M context window, this override triggers compaction above 600K tokens and keeps the ordinary 20000 recent tokens. Other models retain the ordinary 16384-token reserve. `reserveTokens` also influences summarization output limits, capped by the model's maximum output tokens; it is not solely a trigger threshold.
 
 Keys are exact, case-sensitive `provider/modelId` values, including any slashes within the model ID. Each `reserveTokens` and `keepRecentTokens` value falls back independently from the model override to the ordinary setting to the built-in default. Values must be non-negative safe integers. Invalid values in the matching model override produce an error when read; only omitted fields fall back to the ordinary setting. Model override entries must be objects. Invalid ordinary token settings produce an error when read, even if the active model has a valid override. Only omitted ordinary values use built-in defaults. `enabled` remains global, not model-specific.
+
+`thresholdRatio` also resolves independently from the matching model override to the ordinary setting. Both ordinary and matching override ratios must be finite numbers strictly between 0 and 1; invalid values produce an error when read. When neither ratio is configured, the reserve-token trigger applies. A configured ratio takes precedence over the reserve-token trigger, including model-specific reserve budgets.
 
 These resolved values are used for manual compaction, all automatic threshold checks, overflow recovery, and extension-visible `preparation.settings`. Model switches affect subsequent checks and compactions without changing ordinary settings. Compaction already in progress uses the model and settings captured for that operation. Branch summarization settings are unaffected.
 

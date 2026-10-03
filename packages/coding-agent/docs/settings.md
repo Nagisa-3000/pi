@@ -70,11 +70,14 @@ CLI tool options override this setting for one invocation; `--tools` does not ac
 | `compaction.enabled` | boolean | `true` | Enable automatic compaction. |
 | `compaction.reserveTokens` | number | `16384` | Tokens reserved for the model response. |
 | `compaction.keepRecentTokens` | number | `20000` | Recent tokens retained without summarization. |
-| `compaction.modelOverrides` | object | None | Per-model token settings keyed by exact `provider/modelId`. |
+| `compaction.thresholdRatio` | number | None | Compact above this fraction of the context window. Must be greater than 0 and less than 1. |
+| `compaction.modelOverrides` | object | None | Per-model token settings and threshold ratios keyed by exact `provider/modelId`. |
 
 <a id="per-model-compaction-overrides"></a>
 
 Compaction token values must be non-negative safe integers. Each value resolves independently from the matching model override, then the ordinary compaction setting, then the built-in default. Project and user objects merge before model lookup.
+
+When a threshold ratio is configured, automatic compaction triggers above `Math.floor(contextWindow * thresholdRatio)`. Ratios resolve from the matching model override, then the ordinary setting. Omit the ratio to use `contextWindow - reserveTokens`. The ratio does not change summary output or recent-history budgets.
 
 See [Compaction Reference](compaction.md) for trigger, summarization, and validation behavior.
 

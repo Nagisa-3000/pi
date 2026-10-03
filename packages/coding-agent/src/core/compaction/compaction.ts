@@ -121,6 +121,7 @@ export interface CompactionSettings {
 	enabled: boolean;
 	reserveTokens: number;
 	keepRecentTokens: number;
+	thresholdRatio?: number;
 }
 
 export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
@@ -266,7 +267,11 @@ export function estimateProjectedContextTokens(
  */
 export function shouldCompact(contextTokens: number, contextWindow: number, settings: CompactionSettings): boolean {
 	if (!settings.enabled) return false;
-	return contextTokens > contextWindow - settings.reserveTokens;
+	const threshold =
+		settings.thresholdRatio === undefined
+			? contextWindow - settings.reserveTokens
+			: Math.floor(contextWindow * settings.thresholdRatio);
+	return contextTokens > threshold;
 }
 
 // ============================================================================
